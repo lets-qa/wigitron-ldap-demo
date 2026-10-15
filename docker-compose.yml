@@ -4,9 +4,12 @@ services:
     container_name: samba-dc
     cap_add:
       - SYS_ADMIN
+    # Host-published ports are overridable; the container always listens on
+    # 389/636 internally. Override LDAP_PORT/LDAPS_PORT (e.g. in .env) when a
+    # host already has those ports taken — the intl DC publishes 1389/1636.
     ports:
-      - "389:389"
-      - "636:636"
+      - "${LDAP_PORT:-389}:389"
+      - "${LDAPS_PORT:-636}:636"
     volumes:
       - samba-data:/var/lib/samba
       - samba-config:/etc/samba

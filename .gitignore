@@ -1,0 +1,2 @@
+# Local per-deployment overrides — never commit the real one.
+.env

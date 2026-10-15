@@ -19,6 +19,15 @@ if [ ! -f /var/lib/samba/private/sam.ldb ]; then
 
     # Allow legacy applications to perform plaintext simple binds over port 389
     sed -i "/\\[global\\]/a \\        ldap server require strong auth = ${LDAP_STRONG_AUTH}" /etc/samba/smb.conf
+
+    # Disable password aging for this test directory so the admin (and seeded
+    # users) never expire out from under you. Without this, the stock 42-day
+    # max-password-age silently expires every account and no admin can bind to
+    # fix it over LDAP (data 532 PASSWORD_EXPIRED).
+    samba-tool domain passwordsettings set --max-pwd-age=0
+
+    # Belt-and-suspenders: pin the built-in Administrator to never expire.
+    samba-tool user setexpiry Administrator --noexpiry
 fi
 
 echo "Starting Samba AD DC..."

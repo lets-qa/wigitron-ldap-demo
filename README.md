@@ -243,3 +243,29 @@ The shared scripts read the following variables. All have sensible defaults so e
 | `AD_NETBIOS_DOMAIN` | `WIGITRON` | NetBIOS/short domain name (max 15 chars) passed to `samba-tool domain provision` |
 | `AD_REALM` | `WIGITRON.com` | Full DNS realm passed to `samba-tool domain provision` |
 | `AD_ADMIN_PASSWORD` | `Admin!Test1234` | Administrator password set during domain provisioning |
+
+---
+
+### Overriding Host Ports
+
+The container always listens on `389`/`636` internally; only the published **host**
+ports are configurable, so a single deployment that already has those ports taken
+(for example a second DC on the same host) doesn't need file edits. Copy
+`.env.example` to `.env` and set the ports:
+
+    LDAP_PORT=1389
+    LDAPS_PORT=1636
+
+`docker compose up -d` then publishes those ports. `test_binds.sh` also reads
+`LDAP_HOST` and `LDAPS_PORT`, so you can point it at a remote DC without editing it:
+
+    LDAP_HOST=ci.bcasqa.com LDAPS_PORT=1636 ./test_binds.sh
+
+### Password Expiry
+
+On first provision the entrypoint disables domain password aging
+(`--max-pwd-age=0`) and pins the `Administrator` account to never expire. Without
+this, Samba's stock 42-day policy silently expires every account — including the
+admin — after which no account can bind over LDAP to fix it (`data 532`,
+`PASSWORD_EXPIRED`). The reset must then be done locally with `samba-tool` inside
+the container.

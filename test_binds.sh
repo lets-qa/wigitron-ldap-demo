@@ -1,6 +1,11 @@
 #!/bin/bash
 
-LDAP_URI="${LDAP_URI:-ldap://localhost:389}"
+# Host/port default to a stock local run but are overridable so this script can
+# target a remapped or remote DC without edits, e.g. the intl DC:
+#   LDAP_HOST=ci.bcasqa.com LDAP_PORT=1389 ./test_binds.sh
+LDAP_HOST="${LDAP_HOST:-localhost}"
+LDAP_PORT="${LDAP_PORT:-389}"
+LDAP_URI="${LDAP_URI:-ldap://${LDAP_HOST}:${LDAP_PORT}}"
 DOCKER_INTERNAL_LDAP_URI="${DOCKER_INTERNAL_LDAP_URI:-ldap://127.0.0.1:389}"
 SAMBA_CONTAINER="${SAMBA_CONTAINER:-samba-dc}"
 UPN_DOMAIN="${UPN_DOMAIN:-wigitron.com}"
