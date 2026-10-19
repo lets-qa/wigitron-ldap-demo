@@ -38,6 +38,20 @@ def test_bad_fqdn_422(monkeypatch):
     assert c.post("/domains", json={"fqdn": "localhost"}).status_code == 422
 
 
+def test_malformed_fqdn_rejected_422(monkeypatch):
+    # The model's hostname pattern rejects these before any seeding.
+    c = _client({}, monkeypatch)
+    for bad in [".com", "a..b", "-x.com", "x_y.com", "orange.rmorse.", "a.b_c.com"]:
+        assert c.post("/domains", json={"fqdn": bad, "dry_run": True}).status_code == 422, bad
+
+
+def test_valid_fqdn_still_accepted(monkeypatch):
+    # Guard against the pattern being too strict.
+    c = _client({}, monkeypatch)
+    for ok in ["orange.rmorse.com", "a.b.com", "rmorse.com", "x1.y2.co"]:
+        assert c.post("/domains", json={"fqdn": ok, "dry_run": True}).status_code == 200, ok
+
+
 def test_auth_required_when_configured(monkeypatch):
     env = {"STAFF_PORTAL_USER": "staff", "STAFF_PORTAL_PASS": "pw"}
     c = _client(env, monkeypatch)

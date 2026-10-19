@@ -59,6 +59,10 @@ Body:
 - Creates a nested OU (e.g. `OU=orange,OU=rmorse,dc=wigitron,dc=com`), parent first.
 - mail and UPN are the clean `testuser<i>@<fqdn>`; sAMAccountName is
   hash-suffixed (max 20 chars) to stay unique.
+- Seeds the same six groups as the CLI `seed_ou.sh` — `All_Engineering`,
+  `Dev_Team`, `QA_Team`, `All_Company`, `Support_Team`, `Marketing_Team` — with
+  identical naming, mail/UPN, and allocation. Seeding an FQDN via the API or via
+  `seed_ou.sh` produces the same directory.
 
 ## Non-goals
 

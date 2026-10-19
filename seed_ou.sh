@@ -58,6 +58,7 @@ G_DEV=$(group_name Dev_Team "$FQDN")
 G_QA=$(group_name QA_Team "$FQDN")
 G_ALL=$(group_name All_Company "$FQDN")
 G_SUP=$(group_name Support_Team "$FQDN")
+G_MKT=$(group_name Marketing_Team "$FQDN")
 
 OU_DN="OU=${OU_NAME},${BASE_DN}"
 dc() { docker exec "$CONTAINER" samba-tool "$@"; }
@@ -75,6 +76,11 @@ done
 dc group addmembers "$G_ALL_ENG" "$G_DEV" || true
 dc group addmembers "$G_ALL_ENG" "$G_QA"  || true
 
+# Register the org's UPN suffix once, so the clean testuser@FQDN UPN is accepted
+# (AD rejects a UPN whose suffix is not a registered namespace). samba-tool has
+# no --user-principal-name on `user create`; the UPN is set with `user rename`.
+dc domain trust namespaces --add-upn-suffix="$FQDN" >/dev/null 2>&1 || true
+
 echo "-- Creating ${COUNT} test users"
 for ((i=1; i<=COUNT; i++)); do
   user=$(sam "testuser${i}" "$FQDN")
@@ -83,8 +89,9 @@ for ((i=1; i<=COUNT; i++)); do
     --userou="OU=${OU_NAME}" \
     --given-name="Test" --surname="User${i}" \
     --mail-address="testuser${i}@${FQDN}" \
-    --user-principal-name="testuser${i}@${FQDN}" \
     || echo "   (${user} may already exist)"
+  # Set the clean UPN (hash stays only in the sAMAccountName).
+  dc user rename "$user" --upn="testuser${i}@${FQDN}" >/dev/null 2>&1 || true
   # Never let these expire (matches the hardening applied elsewhere).
   dc user setexpiry "$user" --noexpiry >/dev/null 2>&1 || true
 done
@@ -102,12 +109,17 @@ dc group add "$G_ALL" --groupou="OU=${OU_NAME}" \
   --mail-address="all@${SLUG}.${MAIL_DOMAIN}"     || true
 dc group add "$G_SUP" --groupou="OU=${OU_NAME}" \
   --mail-address="support@${SLUG}.${MAIL_DOMAIN}" || true
+dc group add "$G_MKT" --groupou="OU=${OU_NAME}" \
+  --mail-address="marketing@${SLUG}.${MAIL_DOMAIN}" || true
 
 for i in $(alloc_group All_Company "$COUNT"); do
   dc group addmembers "$G_ALL" "$(sam "testuser${i}" "$FQDN")" || true
 done
 for i in $(alloc_group Support_Team "$COUNT"); do
   dc group addmembers "$G_SUP" "$(sam "testuser${i}" "$FQDN")" || true
+done
+for i in $(alloc_group Marketing_Team "$COUNT"); do
+  dc group addmembers "$G_MKT" "$(sam "testuser${i}" "$FQDN")" || true
 done
 
 echo "== Done. Verify with: =="

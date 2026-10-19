@@ -82,6 +82,9 @@ Endpoints:
   `orange.rmorse.com` becomes `OU=orange,OU=rmorse`; users get clean
   `testuser<i>@orange.rmorse.com` mail + UPN, and a hash-suffixed
   `sAMAccountName` (e.g. `testuser1_4e2a`).
+- Malformed FQDNs (`.com`, `a..b`, `-x.com`, `x_y.com`) are rejected with 422.
+- Seeding via the API produces the **same** directory as the CLI `seed_ou.sh`
+  (same six groups, naming, mail/UPN, and allocation).
 
 Expose on the network with a login (binds `0.0.0.0:8099`, HTTP Basic):
 
