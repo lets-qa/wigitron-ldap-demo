@@ -153,6 +153,47 @@ Users 1–10 belong to `Dev_Team`, and users 11–20 belong to `QA_Team`. Both c
 
 ---
 
+## Consolidating a Separate-Port Domain into an OU
+
+A domain running as its own container on its own ports (for example the
+international DC on `1389`/`1636`) can be migrated into an **Organizational Unit**
+inside the single main DC — one container, no extra ports — with two scripts.
+Passwords are re-set on import (Active Directory cannot export plaintext
+secrets); for test users the known `Password!<N>` convention is reapplied
+automatically, and all other accounts get `DEFAULT_PASSWORD` (default
+`Admin!Test1234`).
+
+### Step 1 — Export the live directory (read-only)
+
+    ./export_directory.sh samba-dc-international intl.json
+
+This captures users (name, mail, enabled/disabled) and groups (mail, members
+including nesting) into `intl.json`. It never modifies the source, so it is safe
+against a live DC. Built-in `Administrator`, `Guest`, and `krbtgt` are excluded.
+
+### Step 2 — Preview the import (dry run)
+
+    ./import_as_ou.sh international intl.json --prefix intl --dry-run
+
+Every object is prefixed (`intl_testuser1`, `intl_Dev_Team`) to satisfy AD's
+domain-wide uniqueness rule. `--dry-run` prints the exact `samba-tool` commands
+without executing them — review it before committing.
+
+### Step 3 — Import for real
+
+    ./import_as_ou.sh international intl.json --prefix intl
+
+Verify:
+
+    docker exec samba-dc samba-tool user list | grep '^intl_'
+
+**Not round-tripped by design:** passwords (reset to known values) and the name
+prefix. Everything else — structure, attributes, memberships, nesting, disabled
+state — carries across. Once verified, the separate `docker-compose.international.yml`
+stack and its ports can be retired.
+
+---
+
 ## Adding a New Domain
 
 The scripts in this repository are fully parameterized, so adding a new office domain is a repeatable, four-step process.
