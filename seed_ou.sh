@@ -22,6 +22,13 @@
 
 set -u
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/staff-portal/lib/naming.sh"
+source "${SCRIPT_DIR}/staff-portal/lib/allocate.sh"
+
+# Test/support hook: `seed_ou.sh print-sam <user> <fqdn>` echoes the shared sAM.
+if [ "${1:-}" = "print-sam" ]; then sam "$2" "$3"; exit 0; fi
+
 CONTAINER="${CONTAINER:-samba-dc}"
 BASE_DN="${LDAP_BASE_DN:-dc=wigitron,dc=com}"
 MAIL_DOMAIN="${MAIL_DOMAIN:-wigitron.com}"
@@ -41,6 +48,15 @@ if [ -z "$SLUG" ]; then
   exit 1
 fi
 
+# Naming domain: same <slug>.<mail-domain> already used for the distribution-list
+# addresses below; hashed by the shared lib so names match the API/staff portal.
+FQDN="${SLUG}.${MAIL_DOMAIN}"
+G_ALL_ENG=$(group_name All_Engineering "$FQDN")
+G_DEV=$(group_name Dev_Team "$FQDN")
+G_QA=$(group_name QA_Team "$FQDN")
+G_ALL=$(group_name All_Company "$FQDN")
+G_SUP=$(group_name Support_Team "$FQDN")
+
 OU_DN="OU=${OU_NAME},${BASE_DN}"
 dc() { docker exec "$CONTAINER" samba-tool "$@"; }
 
@@ -50,16 +66,16 @@ echo "-- Creating the OU: ${OU_DN}"
 dc ou create "$OU_DN" || echo "   (OU may already exist — continuing)"
 
 echo "-- Creating nested groups inside the OU"
-for g in All_Engineering Dev_Team QA_Team; do
-  dc group add "${SLUG}_${g}" --groupou="OU=${OU_NAME}" \
-    || echo "   (${SLUG}_${g} may already exist)"
+for g in "$G_ALL_ENG" "$G_DEV" "$G_QA"; do
+  dc group add "$g" --groupou="OU=${OU_NAME}" \
+    || echo "   (${g} may already exist)"
 done
-dc group addmembers "${SLUG}_All_Engineering" "${SLUG}_Dev_Team" || true
-dc group addmembers "${SLUG}_All_Engineering" "${SLUG}_QA_Team"  || true
+dc group addmembers "$G_ALL_ENG" "$G_DEV" || true
+dc group addmembers "$G_ALL_ENG" "$G_QA"  || true
 
-echo "-- Creating and assigning ${COUNT} test users"
+echo "-- Creating ${COUNT} test users"
 for ((i=1; i<=COUNT; i++)); do
-  user="${SLUG}_testuser${i}"
+  user=$(sam "testuser${i}" "$FQDN")
   pass="Password!${i}"
   dc user create "$user" "$pass" \
     --userou="OU=${OU_NAME}" \
@@ -68,29 +84,31 @@ for ((i=1; i<=COUNT; i++)); do
     || echo "   (${user} may already exist)"
   # Never let these expire (matches the hardening applied elsewhere).
   dc user setexpiry "$user" --noexpiry >/dev/null 2>&1 || true
+done
 
-  if [ "$i" -le $(( COUNT / 2 )) ]; then
-    dc group addmembers "${SLUG}_Dev_Team" "$user" || true
-  else
-    dc group addmembers "${SLUG}_QA_Team" "$user" || true
-  fi
+echo "-- Assigning group memberships (shared allocation)"
+for i in $(alloc_group Dev_Team "$COUNT"); do
+  dc group addmembers "$G_DEV" "$(sam "testuser${i}" "$FQDN")" || true
+done
+for i in $(alloc_group QA_Team "$COUNT"); do
+  dc group addmembers "$G_QA" "$(sam "testuser${i}" "$FQDN")" || true
 done
 
 echo "-- Creating email distribution lists"
-dc group add "${SLUG}_All_Company" --groupou="OU=${OU_NAME}" \
+dc group add "$G_ALL" --groupou="OU=${OU_NAME}" \
   --mail-address="all@${SLUG}.${MAIL_DOMAIN}"     || true
-dc group add "${SLUG}_Support_Team" --groupou="OU=${OU_NAME}" \
+dc group add "$G_SUP" --groupou="OU=${OU_NAME}" \
   --mail-address="support@${SLUG}.${MAIL_DOMAIN}" || true
 
-for ((i=1; i<=COUNT; i++)); do
-  dc group addmembers "${SLUG}_All_Company" "${SLUG}_testuser${i}" || true
+for i in $(alloc_group All_Company "$COUNT"); do
+  dc group addmembers "$G_ALL" "$(sam "testuser${i}" "$FQDN")" || true
 done
-for ((i=1; i<=COUNT && i<=5; i++)); do
-  dc group addmembers "${SLUG}_Support_Team" "${SLUG}_testuser${i}" || true
+for i in $(alloc_group Support_Team "$COUNT"); do
+  dc group addmembers "$G_SUP" "$(sam "testuser${i}" "$FQDN")" || true
 done
 
 echo "== Done. Verify with: =="
-echo "   docker exec ${CONTAINER} samba-tool user list | grep '^${SLUG}_'"
+echo "   docker exec ${CONTAINER} samba-tool user list | grep '_$(hash4 "$FQDN")$'"
 echo "   ldapsearch -H ldap://localhost:\${LDAP_PORT:-389} -x \\"
 echo "     -D \"cn=Administrator,cn=Users,${BASE_DN}\" -w 'Admin!Test1234' \\"
 echo "     -b \"${OU_DN}\" \"(objectClass=user)\" sAMAccountName"

@@ -5,7 +5,8 @@
 # one port set" consolidation of a separate-port domain.
 #
 # AD requires sAMAccountName and group names to be unique DOMAIN-WIDE, so every
-# object is prefixed with a slug (default derived from the OU name). Passwords
+# object gets a hash suffix of <slug>.<mail-domain> (slug defaults to the OU name;
+# --prefix overrides the slug). Passwords
 # are re-set on import (AD cannot export plaintext): testuserN -> Password!N,
 # anything else -> DEFAULT_PASSWORD.
 #
@@ -18,6 +19,9 @@
 #   ./import_as_ou.sh international intl.json --dry-run        # print, don't execute
 
 set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/staff-portal/lib/naming.sh"
 
 CONTAINER="${CONTAINER:-samba-dc}"
 DEFAULT_PASSWORD="${DEFAULT_PASSWORD:-Admin!Test1234}"
@@ -53,12 +57,19 @@ if [ -z "$PREFIX" ]; then
   exit 1
 fi
 
+# Naming domain: <prefix>.<mail-domain> (prefix defaults to the OU slug, matching
+# seed_ou.sh). The hash suffix comes from the shared lib, so names are identical
+# to sam()/group_name() used by seed_ou.sh and the staff-portal API.
+MAIL_DOMAIN="${MAIL_DOMAIN:-wigitron.com}"
+FQDN="${PREFIX}.${MAIL_DOMAIN}"
+NAME_HASH=$(hash4 "$FQDN") || { echo "Error: bad naming domain '$FQDN'." >&2; exit 1; }
+
 # Emit a tab-separated action plan from the manifest; bash executes it. This
 # keeps JSON parsing in python and command execution in bash.
-PLAN=$(PREFIX="$PREFIX" DEFAULT_PASSWORD="$DEFAULT_PASSWORD" \
+PLAN=$(NAME_HASH="$NAME_HASH" DEFAULT_PASSWORD="$DEFAULT_PASSWORD" \
   python3 -I - "$MANIFEST" <<'PY'
 import json, os, re, sys
-prefix = os.environ["PREFIX"]
+name_hash = os.environ["NAME_HASH"]
 default_pw = os.environ["DEFAULT_PASSWORD"]
 with open(sys.argv[1], encoding="utf-8") as fh:
     m = json.load(fh)
@@ -67,7 +78,7 @@ if m.get("schema") != "ldap-directory-export/v1":
     sys.stderr.write("Warning: unexpected manifest schema: %r\n" % m.get("schema"))
 
 def pfx(name):
-    return "%s_%s" % (prefix, name)
+    return "%s_%s" % (name, name_hash)  # == shell sam()/group_name()
 
 # Fields are joined with ASCII Unit Separator (\x1f), NOT tab: tab is an
 # IFS-whitespace char in bash and collapses consecutive/empty fields, which
@@ -109,7 +120,7 @@ run() { # echoes in dry-run, executes otherwise
   fi
 }
 
-echo "== Importing manifest '$MANIFEST' into OU '$OU_NAME' (prefix '${PREFIX}_') =="
+echo "== Importing manifest '$MANIFEST' into OU '$OU_NAME' (naming domain '${FQDN}', suffix '_${NAME_HASH}') =="
 [ "$DRY_RUN" = "true" ] && echo "   (dry-run: no changes will be made)"
 
 echo "-- Ensure OU exists: $OU_DN"
@@ -145,4 +156,4 @@ while IFS=$'\x1f' read -r kind a b c d e f; do
 done <<< "$PLAN"
 
 echo "== Done. Verify with: =="
-echo "   docker exec ${CONTAINER} samba-tool user list | grep '^${PREFIX}_'"
+echo "   docker exec ${CONTAINER} samba-tool user list | grep '_${NAME_HASH}$'"

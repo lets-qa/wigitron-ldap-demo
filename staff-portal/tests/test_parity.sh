@@ -22,4 +22,9 @@ for f in orange.rmorse.com rmorse.com a.b.co; do
   if [ "$py" != "$sh" ]; then echo "MISMATCH hash4 $f: py[$py] sh[$sh]"; fail=1; fi
 done
 
+# Regression: seed_ou.sh must name users via the shared hash suffix.
+SEED_SAM=$(SEED_DRYRUN=1 bash "$HERE/../../seed_ou.sh" print-sam testuser1 orange.rmorse.com 2>/dev/null)
+PY_SAM=$(cd "$BK" && "$PYTHON" -c "from app.naming import sam; print(sam('testuser1','orange.rmorse.com'))")
+if [ "$SEED_SAM" != "$PY_SAM" ]; then echo "MISMATCH seed_ou sam: [$SEED_SAM] vs [$PY_SAM]"; fail=1; fi
+
 [ "$fail" -eq 0 ] && echo "PARITY OK" || { echo "PARITY FAILED"; exit 1; }

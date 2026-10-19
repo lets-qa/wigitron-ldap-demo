@@ -175,7 +175,7 @@ against a live DC. Built-in `Administrator`, `Guest`, and `krbtgt` are excluded.
 
     ./import_as_ou.sh international intl.json --prefix intl --dry-run
 
-Every object is prefixed (`intl_testuser1`, `intl_Dev_Team`) to satisfy AD's
+Every object gets a hash suffix derived from `intl.<mail-domain>` (`testuser1_<hash4>`, `Dev_Team_<hash4>`, identical to the staff-portal API naming) to satisfy AD's
 domain-wide uniqueness rule. `--dry-run` prints the exact `samba-tool` commands
 without executing them — review it before committing.
 
@@ -185,10 +185,10 @@ without executing them — review it before committing.
 
 Verify:
 
-    docker exec samba-dc samba-tool user list | grep '^intl_'
+    docker exec samba-dc samba-tool user list | grep '_<hash4>$'
 
 **Not round-tripped by design:** passwords (reset to known values) and the name
-prefix. Everything else — structure, attributes, memberships, nesting, disabled
+suffix. Everything else — structure, attributes, memberships, nesting, disabled
 state — carries across. Once verified, the separate `docker-compose.international.yml`
 stack and its ports can be retired.
 
