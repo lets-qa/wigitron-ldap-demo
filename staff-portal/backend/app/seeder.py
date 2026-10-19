@@ -15,8 +15,6 @@ PLAIN_GROUPS = ["All_Engineering", "Dev_Team", "QA_Team"]
 def build_plan(fqdn: str, user_count: int, base_dn: str) -> list[list[str]]:
     fqdn = normalize_fqdn(fqdn)
     ous = ou_path(fqdn, base_dn)
-    leaf_rdn = ous[-1].split(",", 1)[0]          # e.g. "OU=orange"
-    leaf_ou = leaf_rdn.split("=", 1)[1]          # e.g. "orange"
     userou = ous[-1]                             # full DN for --userou/--groupou
     plan: list[list[str]] = []
 
@@ -64,6 +62,7 @@ def run_plan(plan, container: str, dry_run: bool = False) -> dict:
     created = {"ou": 0, "users": 0, "groups": 0}
     errors = []
     rendered = []
+    docker_available = True
     for cmd in plan:
         full = ["docker", "exec", container, "samba-tool", *cmd]
         rendered.append(" ".join(full))
@@ -75,8 +74,14 @@ def run_plan(plan, container: str, dry_run: bool = False) -> dict:
             created["groups"] += 1
         if dry_run:
             continue
-        proc = subprocess.run(full, capture_output=True, text=True)
+        try:
+            proc = subprocess.run(full, capture_output=True, text=True)
+        except OSError as e:  # includes FileNotFoundError (docker binary absent)
+            errors.append({"cmd": " ".join(cmd), "stderr": str(e)[:300]})
+            docker_available = False
+            break
         if proc.returncode != 0:
             errors.append({"cmd": " ".join(cmd),
                            "stderr": proc.stderr.strip()[:300]})
-    return {"created": created, "errors": errors, "commands": rendered}
+    return {"created": created, "errors": errors, "commands": rendered,
+            "docker_available": docker_available}

@@ -42,12 +42,14 @@ def create_domain(req: CreateDomain):
     try:
         fqdn = normalize_fqdn(req.fqdn)
     except ValueError as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+        raise HTTPException(422, str(e))
     if req.user_count > SETTINGS.max_users:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+        raise HTTPException(422,
                             f"user_count exceeds max {SETTINGS.max_users}")
     plan = build_plan(fqdn, req.user_count, SETTINGS.base_dn)
     result = run_plan(plan, SETTINGS.container, dry_run=req.dry_run)
+    if not result.get("docker_available", True):
+        raise HTTPException(502, "docker unavailable: " + result["errors"][-1]["stderr"])
     return {
         "fqdn": fqdn,
         "ou_dn": ou_path(fqdn, SETTINGS.base_dn)[-1],

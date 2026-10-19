@@ -49,3 +49,27 @@ def test_auth_required_when_configured(monkeypatch):
     ok = c.post("/domains", json={"fqdn": "a.b.com", "dry_run": True},
                 auth=("staff", "pw"))
     assert ok.status_code == 200
+
+
+def test_docker_missing_returns_502(monkeypatch):
+    import app.seeder as seeder
+
+    def boom(*a, **k):
+        raise FileNotFoundError("docker")
+    monkeypatch.setattr(seeder.subprocess, "run", boom)
+    c = _client({}, monkeypatch)
+    r = c.post("/domains", json={"fqdn": "orange.example.com", "user_count": 3,
+                                 "dry_run": False})
+    assert r.status_code == 502
+
+
+def test_dry_run_never_calls_subprocess_or_502(monkeypatch):
+    import app.seeder as seeder
+
+    def boom(*a, **k):
+        raise AssertionError("subprocess called")
+    monkeypatch.setattr(seeder.subprocess, "run", boom)
+    c = _client({}, monkeypatch)
+    r = c.post("/domains", json={"fqdn": "orange.example.com", "user_count": 3,
+                                 "dry_run": True})
+    assert r.status_code == 200
