@@ -16,7 +16,7 @@
 - `sAMAccountName` ≤ 20 chars, no `@`. Scheme: `testuser<i>_<hash4>`, `<hash4>` = first 4 hex chars of `sha256(fqdn.lower())`.
 - `mail` and `userPrincipalName` both = `testuser<i>@<fqdn>`.
 - Group names also hash-suffixed: `Dev_Team_<hash4>`, `All_Engineering_<hash4>`, `QA_Team_<hash4>`, `All_Company_<hash4>`, `Support_Team_<hash4>`, `Marketing_Team_<hash4>`.
-- Allocation (users `1..N`): `All_Company`=1..N; `Dev_Team`=1..floor(N/2); `QA_Team`=floor(N/2)+1..N; `Support_Team`=1..floor(N/4); `Marketing_Team`=floor(N/4)+1..floor(N/2); `All_Engineering` nests Dev+QA, no direct users. Default N=20, max 500.
+- Allocation (users `1..N`): `All_Company`=1..N; `Dev_Team`=1..ceil(N/2); `QA_Team`=ceil(N/2)+1..N; `Support_Team`=1..floor(N/4); `Marketing_Team`=floor(N/4)+1..floor(N/2); `All_Engineering` nests Dev+QA, no direct users. Default N=20, max 500. (Dev/QA split uses ceil so a lone/odd user lands in Dev — the first half — matching the spec's worked-example table; Marketing's upper bound stays floor(N/2). For even N, ceil=floor so N=20/50 are unchanged.)
 - Base DN default `dc=wigitron,dc=com`; container default `samba-dc`.
 - Auth/bind coupling: no auth env → bind `127.0.0.1`; `STAFF_PORTAL_USER`+`STAFF_PORTAL_PASS` set → Basic auth + bind `0.0.0.0`. Non-loopback bind without auth → refuse to start (exit non-zero).
 - Create-only: no edit/delete/list-accounts/password endpoints. `GET /domains` (list OUs) and `GET /health` are the only reads.
@@ -90,14 +90,15 @@ Expected: FAIL (ModuleNotFoundError: app.allocate)
 
 
 def allocate(n: int) -> dict[str, list[int]]:
-    half = n // 2
+    half_lo = n // 2          # floor(N/2): Marketing upper bound, QA start anchor
+    half_hi = (n + 1) // 2    # ceil(N/2): Dev gets the lone/odd user
     quarter = n // 4
     return {
         "All_Company": list(range(1, n + 1)),
-        "Dev_Team": list(range(1, half + 1)),
-        "QA_Team": list(range(half + 1, n + 1)),
+        "Dev_Team": list(range(1, half_hi + 1)),
+        "QA_Team": list(range(half_hi + 1, n + 1)),
         "Support_Team": list(range(1, quarter + 1)),
-        "Marketing_Team": list(range(quarter + 1, half + 1)),
+        "Marketing_Team": list(range(quarter + 1, half_lo + 1)),
     }
 ```
 
@@ -728,13 +729,14 @@ Expected: FAIL (allocate.sh / naming.sh not found or functions undefined)
 # staff-portal/lib/allocate.sh
 # Shell mirror of app/allocate.py. alloc_group <group> <n> -> space-sep indices.
 alloc_group() {
-  local g="$1" n="$2" half=$(( $2 / 2 )) quarter=$(( $2 / 4 )) i out=""
+  # half_hi = ceil(N/2) for Dev/QA split; half_lo = floor(N/2) for Marketing top.
+  local g="$1" n="$2" half_lo=$(( $2 / 2 )) half_hi=$(( ($2 + 1) / 2 )) quarter=$(( $2 / 4 )) i out=""
   case "$g" in
     All_Company)    for ((i=1;i<=n;i++)); do out+="$i "; done ;;
-    Dev_Team)       for ((i=1;i<=half;i++)); do out+="$i "; done ;;
-    QA_Team)        for ((i=half+1;i<=n;i++)); do out+="$i "; done ;;
+    Dev_Team)       for ((i=1;i<=half_hi;i++)); do out+="$i "; done ;;
+    QA_Team)        for ((i=half_hi+1;i<=n;i++)); do out+="$i "; done ;;
     Support_Team)   for ((i=1;i<=quarter;i++)); do out+="$i "; done ;;
-    Marketing_Team) for ((i=quarter+1;i<=half;i++)); do out+="$i "; done ;;
+    Marketing_Team) for ((i=quarter+1;i<=half_lo;i++)); do out+="$i "; done ;;
   esac
   echo "${out% }"
 }

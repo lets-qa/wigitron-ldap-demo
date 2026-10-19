@@ -60,8 +60,8 @@ what the LAM web GUI is for. This API only **creates and seeds**.
 Given `N` users (`testuser1 .. testuserN`) in an org:
 
 - `All_Company` — **every** user (1..N).
-- `Dev_Team` — first half: users `1 .. floor(N/2)`.
-- `QA_Team` — second half: users `floor(N/2)+1 .. N`.
+- `Dev_Team` — first half: users `1 .. ceil(N/2)` (a lone/odd user lands here).
+- `QA_Team` — second half: users `ceil(N/2)+1 .. N`.
 - `All_Engineering` — nests `Dev_Team` and `QA_Team` (contains no users directly).
 - `Support_Team` — first proportional quarter: users `1 .. floor(N/4)`.
 - `Marketing_Team` — next proportional quarter: users `floor(N/4)+1 .. floor(N/2)`.
