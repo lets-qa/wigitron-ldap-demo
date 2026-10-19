@@ -27,4 +27,8 @@ SEED_SAM=$(SEED_DRYRUN=1 bash "$HERE/../../seed_ou.sh" print-sam testuser1 orang
 PY_SAM=$(cd "$BK" && "$PYTHON" -c "from app.naming import sam; print(sam('testuser1','orange.rmorse.com'))")
 if [ "$SEED_SAM" != "$PY_SAM" ]; then echo "MISMATCH seed_ou sam: [$SEED_SAM] vs [$PY_SAM]"; fail=1; fi
 
+# Regression: mail/UPN must be the clean email at the FQDN (hash only in sAM).
+SEED_MAIL=$(bash "$HERE/../../seed_ou.sh" print-mail testuser1 orange.rmorse.com 2>/dev/null)
+if [ "$SEED_MAIL" != "testuser1@orange.rmorse.com" ]; then echo "MISMATCH seed_ou mail: [$SEED_MAIL]"; fail=1; fi
+
 [ "$fail" -eq 0 ] && echo "PARITY OK" || { echo "PARITY FAILED"; exit 1; }

@@ -28,6 +28,8 @@ source "${SCRIPT_DIR}/staff-portal/lib/allocate.sh"
 
 # Test/support hook: `seed_ou.sh print-sam <user> <fqdn>` echoes the shared sAM.
 if [ "${1:-}" = "print-sam" ]; then sam "$2" "$3"; exit 0; fi
+# Test/support hook: `seed_ou.sh print-mail <user> <fqdn>` echoes the clean email.
+if [ "${1:-}" = "print-mail" ]; then echo "$2@$3"; exit 0; fi
 
 CONTAINER="${CONTAINER:-samba-dc}"
 BASE_DN="${LDAP_BASE_DN:-dc=wigitron,dc=com}"
@@ -80,7 +82,8 @@ for ((i=1; i<=COUNT; i++)); do
   dc user create "$user" "$pass" \
     --userou="OU=${OU_NAME}" \
     --given-name="Test" --surname="User${i}" \
-    --mail-address="${user}@${MAIL_DOMAIN}" \
+    --mail-address="testuser${i}@${FQDN}" \
+    --user-principal-name="testuser${i}@${FQDN}" \
     || echo "   (${user} may already exist)"
   # Never let these expire (matches the hardening applied elsewhere).
   dc user setexpiry "$user" --noexpiry >/dev/null 2>&1 || true
