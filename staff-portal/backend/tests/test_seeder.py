@@ -20,8 +20,21 @@ def test_user_has_email_mail_upn_and_hash_sam():
     assert "--mail-address=testuser1@orange.rmorse.com" in joined
     assert "--use-username-as-cn" in joined or True  # cn handling optional
     assert f"--userou=OU=orange,OU=rmorse" in joined
-    # UPN carried via --user-principal-name
-    assert "--user-principal-name=testuser1@orange.rmorse.com" in joined
+    assert "--user-principal-name" not in joined
+    assert "--userou=OU=orange,OU=rmorse " in joined + " "
+    assert "dc=wigitron" not in joined.lower()
+    assert ["user", "rename", s, "--upn=testuser1@orange.rmorse.com"] in plan
+    assert ["domain", "trust", "namespaces",
+            "--add-upn-suffix=orange.rmorse.com"] in plan
+    # suffix registered before any rename; groupou relative too
+    idx_suffix = plan.index(["domain", "trust", "namespaces",
+                             "--add-upn-suffix=orange.rmorse.com"])
+    assert idx_suffix < plan.index(
+        ["user", "rename", s, "--upn=testuser1@orange.rmorse.com"])
+    for c in plan:
+        for a in c:
+            if a.startswith(("--userou=", "--groupou=")):
+                assert "dc=wigitron" not in a.lower()
 
 
 def test_all_company_has_everyone_and_group_mail_uses_fqdn():

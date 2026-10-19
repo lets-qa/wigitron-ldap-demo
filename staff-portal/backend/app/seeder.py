@@ -12,14 +12,25 @@ GROUPS_WITH_MAIL = {
 PLAIN_GROUPS = ["All_Engineering", "Dev_Team", "QA_Team"]
 
 
+def relative_ou(full_dn: str, base_dn: str) -> str:
+    """Strip the trailing ',<base_dn>' (samba-tool --userou/--groupou are relative)."""
+    suffix = "," + base_dn
+    if full_dn.lower().endswith(suffix.lower()):
+        return full_dn[: -len(suffix)]
+    return full_dn
+
+
 def build_plan(fqdn: str, user_count: int, base_dn: str) -> list[list[str]]:
     fqdn = normalize_fqdn(fqdn)
     ous = ou_path(fqdn, base_dn)
-    userou = ous[-1]                             # full DN for --userou/--groupou
+    userou = relative_ou(ous[-1], base_dn)       # relative form for --userou/--groupou
     plan: list[list[str]] = []
 
     for dn in ous:                               # parent-first
         plan.append(["ou", "create", dn])
+
+    # Register the org's UPN suffix once so clean UPNs are accepted.
+    plan.append(["domain", "trust", "namespaces", f"--add-upn-suffix={fqdn}"])
 
     a = allocate(user_count)
 
@@ -44,9 +55,9 @@ def build_plan(fqdn: str, user_count: int, base_dn: str) -> list[list[str]]:
             f"--userou={userou}",
             "--given-name=Test", f"--surname=User{i}",
             f"--mail-address={email}",
-            f"--user-principal-name={email}",
         ])
         plan.append(["user", "setexpiry", s, "--noexpiry"])
+        plan.append(["user", "rename", s, f"--upn={email}"])
 
     # Memberships from the allocation (skip All_Engineering; it nests groups).
     for g, members in a.items():
