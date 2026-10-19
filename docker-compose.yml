@@ -14,6 +14,26 @@ services:
       - samba-data:/var/lib/samba
       - samba-config:/etc/samba
 
+  # Web GUI for managing the directory (LDAP Account Manager). It talks to the
+  # DC over the internal Docker network as ldap://samba-dc:389, so it does not
+  # depend on the remapped host ports above. Reach it at http://localhost:7080
+  # (override with LAM_PORT).
+  lam:
+    image: ghcr.io/ldapaccountmanager/lam:stable
+    container_name: lam
+    depends_on:
+      - samba-dc
+    ports:
+      - "${LAM_PORT:-7080}:80"
+    environment:
+      LAM_SKIP_PRECONFIGURE: "false"
+      LDAP_SERVER: "ldap://samba-dc:389"
+      LDAP_DOMAIN: "${LDAP_DOMAIN:-wigitron.com}"
+      LDAP_BASE_DN: "${LDAP_BASE_DN:-dc=wigitron,dc=com}"
+      LDAP_USER: "cn=Administrator,cn=Users,${LDAP_BASE_DN:-dc=wigitron,dc=com}"
+      ADMIN_USER: "cn=Administrator,cn=Users,${LDAP_BASE_DN:-dc=wigitron,dc=com}"
+      LAM_PASSWORD: "${LAM_PASSWORD:-lam}"
+
 volumes:
   samba-data:
   samba-config:
