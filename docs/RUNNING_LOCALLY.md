@@ -43,9 +43,25 @@ docker compose up -d lam
 ```
 
 Open **http://localhost:7080**. LAM talks to the DC internally
-(`ldap://samba-dc:389`), so it is independent of the host port mapping. Use it to
-browse, edit, disable, and reset accounts. Override the port with
-`LAM_PORT=9090 docker compose up -d lam`.
+(`ldap://samba-dc:389`), so it is independent of the host port mapping. Override
+the port with `LAM_PORT=9090 docker compose up -d lam`.
+
+**Logging in:**
+
+1. On the LAM login page, the LDAP profile is pre-configured to point at the DC
+   (`ldap://samba-dc:389`, base `dc=wigitron,dc=com`).
+2. Log in as the directory admin — username `Administrator`, password
+   `Admin!Test1234`. (LAM signs in to AD as
+   `cn=Administrator,cn=Users,dc=wigitron,dc=com`.)
+3. The password on the **LAM configuration** page (for editing the server profile
+   itself, not logging into AD) is `lam` by default — override with
+   `LAM_PASSWORD=... docker compose up -d lam`.
+
+**Using it:** once logged in, the **Users**, **Groups**, and **Hosts** tabs let
+you browse, create, edit, disable, and reset accounts in the directory. Seeded
+`testuser*` accounts and the `All_Company` / `Support_Team` / `Marketing_Team`
+groups appear here. This is the intended way to *manage* accounts — the
+staff-portal API only *creates/seeds*, everything else is done in LAM.
 
 ## 4. Staff-portal API + Swagger (create & seed new org directories)
 
@@ -64,27 +80,62 @@ Launch (no auth → binds `127.0.0.1:8099`):
 PYTHON=$PWD/.venv/bin/python UVICORN=$PWD/.venv/bin/uvicorn ./staff-portal/run.sh
 ```
 
-Open **http://localhost:8099/docs** — the Swagger UI is the interface.
+Two ways to drive it: the **Swagger UI** at **http://localhost:8099/docs** (click
+an endpoint → "Try it out" → fill the body → "Execute"), or **curl** from a shell.
 
-Endpoints:
+### Endpoints
 
 - `GET /health` — liveness.
-- `GET /domains` — list OUs.
-- `POST /domains` — create a nested OU from an FQDN and seed it. Body:
 
-  ```json
-  { "fqdn": "orange.rmorse.com", "user_count": 20, "dry_run": true }
+  ```bash
+  curl http://localhost:8099/health
+  # {"status":"ok"}
   ```
 
-  Run with **`dry_run: true` first** — it returns the exact `samba-tool` commands
-  without touching the DC. Set `dry_run: false` (or omit it) to actually seed.
+- `GET /domains` — list OUs in the DC.
+
+  ```bash
+  curl http://localhost:8099/domains
+  ```
+
+- `POST /domains` — create a nested OU from an FQDN and seed it.
+
+  **Preview first (`dry_run: true`)** — returns the exact plan without touching
+  the DC:
+
+  ```bash
+  curl -X POST http://localhost:8099/domains \
+    -H 'Content-Type: application/json' \
+    -d '{"fqdn":"orange.rmorse.com","user_count":20,"dry_run":true}'
+  # {"fqdn":"orange.rmorse.com","ou_dn":"OU=orange,OU=rmorse,dc=wigitron,dc=com",
+  #  "mail_domain":"orange.rmorse.com","created":{"ou":2,"users":20,"groups":6},
+  #  "errors":[],"dry_run":true}
+  ```
+
+  **Seed for real** (omit `dry_run`, or set it `false`):
+
+  ```bash
+  curl -X POST http://localhost:8099/domains \
+    -H 'Content-Type: application/json' \
+    -d '{"fqdn":"orange.rmorse.com","user_count":20}'
+  ```
 
   `orange.rmorse.com` becomes `OU=orange,OU=rmorse`; users get clean
   `testuser<i>@orange.rmorse.com` mail + UPN, and a hash-suffixed
-  `sAMAccountName` (e.g. `testuser1_4e2a`).
-- Malformed FQDNs (`.com`, `a..b`, `-x.com`, `x_y.com`) are rejected with 422.
-- Seeding via the API produces the **same** directory as the CLI `seed_ou.sh`
-  (same six groups, naming, mail/UPN, and allocation).
+  `sAMAccountName` (e.g. `testuser1_4e2a`). A seeded user can then bind:
+
+  ```bash
+  docker exec samba-dc ldapwhoami -H ldap://localhost -x \
+    -D "testuser1@orange.rmorse.com" -w 'Password!1'
+  # u:WIGITRON\testuser1_<hash>
+  ```
+
+- `user_count` defaults to 20 (1–500). Malformed FQDNs (`.com`, `a..b`, `-x.com`,
+  `x_y.com`) are rejected with **422**. Seeding via the API produces the **same**
+  directory as the CLI `seed_ou.sh` (same six groups, naming, mail/UPN, allocation).
+
+When auth is enabled (below), add `-u staff:secret` to each curl, or use Swagger's
+**Authorize** button.
 
 Expose on the network with a login (binds `0.0.0.0:8099`, HTTP Basic):
 

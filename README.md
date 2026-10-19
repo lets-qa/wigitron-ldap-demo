@@ -113,6 +113,25 @@ Run this command to ask the directory for everyone assigned to the support email
 
 *The output should cleanly list the distinguished names (DN) of test users 1 through 5.*
 
+#### Query Groups from the Local Domain
+
+The local domain is `wigitron.com` on port `389`, so the base DN is
+`dc=wigitron,dc=com`. This is the local equivalent of the international
+`curl` query above:
+
+    curl -u "cn=Administrator,cn=Users,dc=wigitron,dc=com:Admin!Test1234" \
+      "ldap://localhost:389/dc=wigitron,dc=com?cn,mail?sub?(objectClass=group)"
+
+Querying from the domain root returns AD's built-in groups (`Domain Admins`,
+`Schema Admins`, etc.) alongside the seeded ones. To list **only** the seeded
+distribution lists, filter for mail-enabled groups:
+
+    curl -u "cn=Administrator,cn=Users,dc=wigitron,dc=com:Admin!Test1234" \
+      "ldap://localhost:389/dc=wigitron,dc=com?cn,mail?sub?(&(objectClass=group)(mail=*))"
+
+*That returns just `All_Company`, `Support_Team`, and `Marketing_Team` with their
+`mail` addresses.*
+
 ## Stopping and Resetting
 
 **To stop the environment (while keeping your data):**
