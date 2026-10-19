@@ -187,6 +187,30 @@ Verify:
 
     docker exec samba-dc samba-tool user list | grep '_<hash4>$'
 
+#### Query Groups from an Imported OU
+
+To retrieve all groups from an org seeded into an OU, run this `curl` command from
+your host. Unlike the separate-port international domain, an OU lives inside the
+**main** DC on port `389`, so the base DN is the OU under the main domain. The
+LDAP URL encodes the base DN, the attributes to return (`cn` and `mail`), the
+search scope (`sub`), and the filter (`objectClass=group`):
+
+    curl -u "cn=Administrator,cn=Users,dc=wigitron,dc=com:Admin!Test1234" \
+      "ldap://localhost:389/OU=international,dc=wigitron,dc=com?cn,mail?sub?(objectClass=group)"
+
+The base DN depends on how the OU was created:
+
+- `./import_as_ou.sh international intl.json` creates a **flat** OU →
+  `OU=international,dc=wigitron,dc=com` (as above).
+- The staff-portal API (`POST /domains {"fqdn": "intl.wigitron.com"}`) maps each
+  FQDN label to a **nested** OU (dropping the TLD) →
+  `OU=intl,OU=wigitron,dc=wigitron,dc=com`. Adjust the base DN accordingly.
+
+*The output lists the six hash-suffixed groups seeded into that OU —
+`All_Engineering_<hash4>`, `Dev_Team_<hash4>`, `QA_Team_<hash4>`,
+`All_Company_<hash4>`, `Support_Team_<hash4>`, and `Marketing_Team_<hash4>` — with
+their `mail` attributes where set.*
+
 **Not round-tripped by design:** passwords (reset to known values) and the name
 suffix. Everything else — structure, attributes, memberships, nesting, disabled
 state — carries across. Once verified, the separate `docker-compose.international.yml`
