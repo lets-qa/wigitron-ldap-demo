@@ -3,6 +3,7 @@ from app.allocate import allocate
 
 def test_n20_matches_legacy_ranges():
     a = allocate(20)
+    assert set(a) == {"All_Company", "Dev_Team", "QA_Team", "Support_Team", "Marketing_Team"}
     assert a["All_Company"] == list(range(1, 21))
     assert a["Dev_Team"] == list(range(1, 11))
     assert a["QA_Team"] == list(range(11, 21))
@@ -24,5 +25,6 @@ def test_small_n_edges():
         "Support_Team": [], "Marketing_Team": [],
     }
     a2 = allocate(2)
+    assert a2["All_Company"] == [1, 2]
     assert a2["Dev_Team"] == [1] and a2["QA_Team"] == [2]
     assert a2["Support_Team"] == [] and a2["Marketing_Team"] == [1]
