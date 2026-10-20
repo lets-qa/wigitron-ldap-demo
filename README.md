@@ -2,6 +2,10 @@
 
 This repository provides a fully functional, containerized Active Directory LDAP simulator based on Samba. It is designed for testing legacy applications that rely on Microsoft AD specific schemas (like `sAMAccountName`, `userPrincipalName`, and nested groups).
 
+> **New here?** [`docs/TUTORIAL.md`](docs/TUTORIAL.md) is a start-to-finish
+> walkthrough on the single-port model: deploy → verify → add/query data → log
+> into the web GUI → create a new "domain" on the CLI and via the API.
+
 ## Included Files
 
 - `docker-compose.yml`: Defines the Samba container, port mappings, and persistent volumes.
