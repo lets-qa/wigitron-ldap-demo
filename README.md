@@ -48,7 +48,7 @@ This stack uses `ldap://localhost:1389`, `ldaps://localhost:1636`, and provision
 
 To retrieve all groups from the `intl.wigitron.com` directory, run this `curl` command from your host. The LDAP URL encodes the base DN, the attributes to return (`cn` and `mail`), the search scope (`sub` for the full subtree), and the filter (`objectClass=group`):
 
-    curl -u "cn=Administrator,cn=Users,dc=intl,dc=wigitron,dc=com:Admin!Test1234" \
+    curl -u 'cn=Administrator,cn=Users,dc=intl,dc=wigitron,dc=com:Admin!Test1234' \
       "ldap://localhost:1389/dc=intl,dc=wigitron,dc=com?cn,mail?sub?(objectClass=group)"
 
 *The output will list all six groups seeded by the companion scripts: `All_Engineering`, `Dev_Team`, `QA_Team`, `All_Company`, `Support_Team`, and `Marketing_Team`, along with their `mail` attributes where set.*
@@ -119,14 +119,14 @@ The local domain is `wigitron.com` on port `389`, so the base DN is
 `dc=wigitron,dc=com`. This is the local equivalent of the international
 `curl` query above:
 
-    curl -u "cn=Administrator,cn=Users,dc=wigitron,dc=com:Admin!Test1234" \
+    curl -u 'cn=Administrator,cn=Users,dc=wigitron,dc=com:Admin!Test1234' \
       "ldap://localhost:389/dc=wigitron,dc=com?cn,mail?sub?(objectClass=group)"
 
 Querying from the domain root returns AD's built-in groups (`Domain Admins`,
 `Schema Admins`, etc.) alongside the seeded ones. To list **only** the seeded
 distribution lists, filter for mail-enabled groups:
 
-    curl -u "cn=Administrator,cn=Users,dc=wigitron,dc=com:Admin!Test1234" \
+    curl -u 'cn=Administrator,cn=Users,dc=wigitron,dc=com:Admin!Test1234' \
       "ldap://localhost:389/dc=wigitron,dc=com?cn,mail?sub?(&(objectClass=group)(mail=*))"
 
 *That returns just `All_Company`, `Support_Team`, and `Marketing_Team` with their
@@ -214,7 +214,7 @@ your host. Unlike the separate-port international domain, an OU lives inside the
 LDAP URL encodes the base DN, the attributes to return (`cn` and `mail`), the
 search scope (`sub`), and the filter (`objectClass=group`):
 
-    curl -u "cn=Administrator,cn=Users,dc=wigitron,dc=com:Admin!Test1234" \
+    curl -u 'cn=Administrator,cn=Users,dc=wigitron,dc=com:Admin!Test1234' \
       "ldap://localhost:389/OU=international,dc=wigitron,dc=com?cn,mail?sub?(objectClass=group)"
 
 The base DN depends on how the OU was created:
