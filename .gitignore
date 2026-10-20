@@ -1,0 +1,12 @@
+# Local per-deployment overrides — never commit the real one.
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.venv
+staff-portal/backend/.pytest_cache/
+
+# Browser automation scratch
+.playwright-mcp/

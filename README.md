@@ -2,6 +2,10 @@
 
 This repository provides a fully functional, containerized Active Directory LDAP simulator based on Samba. It is designed for testing legacy applications that rely on Microsoft AD specific schemas (like `sAMAccountName`, `userPrincipalName`, and nested groups).
 
+> **New here?** [`docs/TUTORIAL.md`](docs/TUTORIAL.md) is a start-to-finish
+> walkthrough on the single-port model: deploy → verify → add/query data → log
+> into the web GUI → create a new "domain" on the CLI and via the API.
+
 ## Included Files
 
 - `docker-compose.yml`: Defines the Samba container, port mappings, and persistent volumes.
@@ -48,7 +52,7 @@ This stack uses `ldap://localhost:1389`, `ldaps://localhost:1636`, and provision
 
 To retrieve all groups from the `intl.wigitron.com` directory, run this `curl` command from your host. The LDAP URL encodes the base DN, the attributes to return (`cn` and `mail`), the search scope (`sub` for the full subtree), and the filter (`objectClass=group`):
 
-    curl -u "cn=Administrator,cn=Users,dc=intl,dc=wigitron,dc=com:Admin!Test1234" \
+    curl -u 'cn=Administrator,cn=Users,dc=intl,dc=wigitron,dc=com:Admin!Test1234' \
       "ldap://localhost:1389/dc=intl,dc=wigitron,dc=com?cn,mail?sub?(objectClass=group)"
 
 *The output will list all six groups seeded by the companion scripts: `All_Engineering`, `Dev_Team`, `QA_Team`, `All_Company`, `Support_Team`, and `Marketing_Team`, along with their `mail` attributes where set.*
@@ -113,6 +117,25 @@ Run this command to ask the directory for everyone assigned to the support email
 
 *The output should cleanly list the distinguished names (DN) of test users 1 through 5.*
 
+#### Query Groups from the Local Domain
+
+The local domain is `wigitron.com` on port `389`, so the base DN is
+`dc=wigitron,dc=com`. This is the local equivalent of the international
+`curl` query above:
+
+    curl -u 'cn=Administrator,cn=Users,dc=wigitron,dc=com:Admin!Test1234' \
+      "ldap://localhost:389/dc=wigitron,dc=com?cn,mail?sub?(objectClass=group)"
+
+Querying from the domain root returns AD's built-in groups (`Domain Admins`,
+`Schema Admins`, etc.) alongside the seeded ones. To list **only** the seeded
+distribution lists, filter for mail-enabled groups:
+
+    curl -u 'cn=Administrator,cn=Users,dc=wigitron,dc=com:Admin!Test1234' \
+      "ldap://localhost:389/dc=wigitron,dc=com?cn,mail?sub?(&(objectClass=group)(mail=*))"
+
+*That returns just `All_Company`, `Support_Team`, and `Marketing_Team` with their
+`mail` addresses.*
+
 ## Stopping and Resetting
 
 **To stop the environment (while keeping your data):**
@@ -150,6 +173,71 @@ All 20 test users follow the same naming and password pattern:
 | `testuser20` | `Password!20` |
 
 Users 1–10 belong to `Dev_Team`, and users 11–20 belong to `QA_Team`. Both child groups are nested inside `All_Engineering`. The same credentials apply to both the default (`wigitron.com`) and international (`intl.wigitron.com`) domains.
+
+---
+
+## Consolidating a Separate-Port Domain into an OU
+
+A domain running as its own container on its own ports (for example the
+international DC on `1389`/`1636`) can be migrated into an **Organizational Unit**
+inside the single main DC — one container, no extra ports — with two scripts.
+Passwords are re-set on import (Active Directory cannot export plaintext
+secrets); for test users the known `Password!<N>` convention is reapplied
+automatically, and all other accounts get `DEFAULT_PASSWORD` (default
+`Admin!Test1234`).
+
+### Step 1 — Export the live directory (read-only)
+
+    ./export_directory.sh samba-dc-international intl.json
+
+This captures users (name, mail, enabled/disabled) and groups (mail, members
+including nesting) into `intl.json`. It never modifies the source, so it is safe
+against a live DC. Built-in `Administrator`, `Guest`, and `krbtgt` are excluded.
+
+### Step 2 — Preview the import (dry run)
+
+    ./import_as_ou.sh international intl.json --prefix intl --dry-run
+
+Every object gets a hash suffix derived from `intl.<mail-domain>` (`testuser1_<hash4>`, `Dev_Team_<hash4>`, identical to the staff-portal API naming) to satisfy AD's
+domain-wide uniqueness rule. `--dry-run` prints the exact `samba-tool` commands
+without executing them — review it before committing.
+
+### Step 3 — Import for real
+
+    ./import_as_ou.sh international intl.json --prefix intl
+
+Verify:
+
+    docker exec samba-dc samba-tool user list | grep '_<hash4>$'
+
+#### Query Groups from an Imported OU
+
+To retrieve all groups from an org seeded into an OU, run this `curl` command from
+your host. Unlike the separate-port international domain, an OU lives inside the
+**main** DC on port `389`, so the base DN is the OU under the main domain. The
+LDAP URL encodes the base DN, the attributes to return (`cn` and `mail`), the
+search scope (`sub`), and the filter (`objectClass=group`):
+
+    curl -u 'cn=Administrator,cn=Users,dc=wigitron,dc=com:Admin!Test1234' \
+      "ldap://localhost:389/OU=international,dc=wigitron,dc=com?cn,mail?sub?(objectClass=group)"
+
+The base DN depends on how the OU was created:
+
+- `./import_as_ou.sh international intl.json` creates a **flat** OU →
+  `OU=international,dc=wigitron,dc=com` (as above).
+- The staff-portal API (`POST /domains {"fqdn": "intl.wigitron.com"}`) maps each
+  FQDN label to a **nested** OU (dropping the TLD) →
+  `OU=intl,OU=wigitron,dc=wigitron,dc=com`. Adjust the base DN accordingly.
+
+*The output lists the six hash-suffixed groups seeded into that OU —
+`All_Engineering_<hash4>`, `Dev_Team_<hash4>`, `QA_Team_<hash4>`,
+`All_Company_<hash4>`, `Support_Team_<hash4>`, and `Marketing_Team_<hash4>` — with
+their `mail` attributes where set.*
+
+**Not round-tripped by design:** passwords (reset to known values) and the name
+suffix. Everything else — structure, attributes, memberships, nesting, disabled
+state — carries across. Once verified, the separate `docker-compose.international.yml`
+stack and its ports can be retired.
 
 ---
 
@@ -243,3 +331,29 @@ The shared scripts read the following variables. All have sensible defaults so e
 | `AD_NETBIOS_DOMAIN` | `WIGITRON` | NetBIOS/short domain name (max 15 chars) passed to `samba-tool domain provision` |
 | `AD_REALM` | `WIGITRON.com` | Full DNS realm passed to `samba-tool domain provision` |
 | `AD_ADMIN_PASSWORD` | `Admin!Test1234` | Administrator password set during domain provisioning |
+
+---
+
+### Overriding Host Ports
+
+The container always listens on `389`/`636` internally; only the published **host**
+ports are configurable, so a single deployment that already has those ports taken
+(for example a second DC on the same host) doesn't need file edits. Copy
+`.env.example` to `.env` and set the ports:
+
+    LDAP_PORT=1389
+    LDAPS_PORT=1636
+
+`docker compose up -d` then publishes those ports. `test_binds.sh` also reads
+`LDAP_HOST` and `LDAPS_PORT`, so you can point it at a remote DC without editing it:
+
+    LDAP_HOST=ci.bcasqa.com LDAPS_PORT=1636 ./test_binds.sh
+
+### Password Expiry
+
+On first provision the entrypoint disables domain password aging
+(`--max-pwd-age=0`) and pins the `Administrator` account to never expire. Without
+this, Samba's stock 42-day policy silently expires every account — including the
+admin — after which no account can bind over LDAP to fix it (`data 532`,
+`PASSWORD_EXPIRED`). The reset must then be done locally with `samba-tool` inside
+the container.

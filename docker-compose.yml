@@ -4,12 +4,43 @@ services:
     container_name: samba-dc
     cap_add:
       - SYS_ADMIN
+    # Host-published ports are overridable; the container always listens on
+    # 389/636 internally. Override LDAP_PORT/LDAPS_PORT (e.g. in .env) when a
+    # host already has those ports taken — the intl DC publishes 1389/1636.
     ports:
-      - "389:389"
-      - "636:636"
+      - "${LDAP_PORT:-389}:389"
+      - "${LDAPS_PORT:-636}:636"
     volumes:
       - samba-data:/var/lib/samba
       - samba-config:/etc/samba
+
+  # Web GUI for managing the directory (LDAP Account Manager). It talks to the
+  # DC over the internal Docker network as ldap://samba-dc:389, so it does not
+  # depend on the remapped host ports above. Reach it at http://localhost:7080
+  # (override with LAM_PORT).
+  lam:
+    image: ghcr.io/ldapaccountmanager/lam:stable
+    container_name: lam
+    depends_on:
+      - samba-dc
+    ports:
+      - "${LAM_PORT:-7080}:80"
+    environment:
+      LAM_SKIP_PRECONFIGURE: "false"
+      LDAP_SERVER: "ldap://samba-dc:389"
+      LDAP_DOMAIN: "${LDAP_DOMAIN:-wigitron.com}"
+      LDAP_BASE_DN: "${LDAP_BASE_DN:-dc=wigitron,dc=com}"
+      LDAP_USER: "cn=Administrator,cn=Users,${LDAP_BASE_DN:-dc=wigitron,dc=com}"
+      ADMIN_USER: "cn=Administrator,cn=Users,${LDAP_BASE_DN:-dc=wigitron,dc=com}"
+      LAM_PASSWORD: "${LAM_PASSWORD:-lam}"
+    # The stock image generates its profile from the Unix LDAP sample
+    # (posixAccount/inetOrgPerson), which does not match Active Directory objects
+    # — the Users/Groups lists come up empty against Samba AD. This wrapper swaps
+    # in LAM's Active Directory sample (windowsUser/windowsGroup) before the
+    # image's start.sh runs, so accounts actually list. See lam-config/.
+    entrypoint: ["/bin/bash", "/lam-config/lam-ad-entrypoint.sh"]
+    volumes:
+      - ./lam-config/lam-ad-entrypoint.sh:/lam-config/lam-ad-entrypoint.sh:ro
 
 volumes:
   samba-data:
