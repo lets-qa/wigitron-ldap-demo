@@ -7,3 +7,6 @@ __pycache__/
 .venv/
 .venv
 staff-portal/backend/.pytest_cache/
+
+# Browser automation scratch
+.playwright-mcp/

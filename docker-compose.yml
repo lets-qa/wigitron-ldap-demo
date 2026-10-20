@@ -33,6 +33,14 @@ services:
       LDAP_USER: "cn=Administrator,cn=Users,${LDAP_BASE_DN:-dc=wigitron,dc=com}"
       ADMIN_USER: "cn=Administrator,cn=Users,${LDAP_BASE_DN:-dc=wigitron,dc=com}"
       LAM_PASSWORD: "${LAM_PASSWORD:-lam}"
+    # The stock image generates its profile from the Unix LDAP sample
+    # (posixAccount/inetOrgPerson), which does not match Active Directory objects
+    # — the Users/Groups lists come up empty against Samba AD. This wrapper swaps
+    # in LAM's Active Directory sample (windowsUser/windowsGroup) before the
+    # image's start.sh runs, so accounts actually list. See lam-config/.
+    entrypoint: ["/bin/bash", "/lam-config/lam-ad-entrypoint.sh"]
+    volumes:
+      - ./lam-config/lam-ad-entrypoint.sh:/lam-config/lam-ad-entrypoint.sh:ro
 
 volumes:
   samba-data:

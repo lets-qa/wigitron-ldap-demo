@@ -104,13 +104,24 @@ Log in with the directory admin:
 - **Password:** `Admin!Test1234`
 
 (LAM is pre-configured to point at the DC internally — `ldap://samba-dc:389`,
-base `dc=wigitron,dc=com` — so there's nothing to configure. If you ever need the
-LAM *configuration* profile password, it's `lam`, overridable with
-`LAM_PASSWORD=…`.)
+base `dc=wigitron,dc=com` — with Active Directory account modules so the lists
+actually show AD users. If you ever need the LAM *configuration* profile
+password, it's `lam`, overridable with `LAM_PASSWORD=…`.)
+
+On the very first login LAM may show a one-time "create suffix" prompt
+(`initsuff.php`) because the configured suffix has no matching OU object — it's
+harmless; click through it or just go straight to **Users**.
 
 Once in, the **Users** and **Groups** tabs let you browse, create, edit, disable,
 and reset accounts — your `testuser*` accounts and the distribution groups all
-appear here. LAM is how you *manage* accounts; the API in Step 5 only *creates*.
+appear here (you'll see a non-zero "User count"). LAM is how you *manage*
+accounts; the API in Step 5 only *creates*.
+
+> Note: the stock LAM Docker image auto-configures itself for *OpenLDAP*
+> (posixAccount), which lists **nothing** against Active Directory. This repo
+> fixes that with `lam-config/lam-ad-entrypoint.sh` (wired in `docker-compose.yml`),
+> which swaps in LAM's Active Directory profile at startup. You don't need to do
+> anything — it just works.
 
 Override the port with `LAM_PORT=9090 docker compose up -d lam`.
 
