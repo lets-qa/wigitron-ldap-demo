@@ -31,4 +31,11 @@ if [ "$SEED_SAM" != "$PY_SAM" ]; then echo "MISMATCH seed_ou sam: [$SEED_SAM] vs
 SEED_MAIL=$(bash "$HERE/../../seed_ou.sh" print-mail testuser1 orange.rmorse.com 2>/dev/null)
 if [ "$SEED_MAIL" != "testuser1@orange.rmorse.com" ]; then echo "MISMATCH seed_ou mail: [$SEED_MAIL]"; fail=1; fi
 
+# FQDN -> OU DN mapping must match the Python app/naming.ou_path (CLI == API).
+for f in orange.rmorse.com acme.test a.b.c.com; do
+  sh=$(ou_path_leaf "$f" "dc=wigitron,dc=com")
+  py=$(cd "$BK" && "$PYTHON" -c "from app.naming import ou_path; print(ou_path('$f','dc=wigitron,dc=com')[-1])")
+  if [ "$sh" != "$py" ]; then echo "MISMATCH ou_path $f: sh[$sh] py[$py]"; fail=1; fi
+done
+
 [ "$fail" -eq 0 ] && echo "PARITY OK" || { echo "PARITY FAILED"; exit 1; }
